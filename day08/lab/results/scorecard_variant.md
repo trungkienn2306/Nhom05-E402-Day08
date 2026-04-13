@@ -1,26 +1,26 @@
-# Scorecard: variant_hybrid_rerank
-Generated: 2026-04-13 16:27
+# Scorecard: variant_hybrid
+Generated: 2026-04-13 17:23
 
 ## Summary
 
 | Metric | Average Score |
 |--------|--------------|
-| Faithfulness | 3.00/5 |
-| Relevance | 3.00/5 |
+| Faithfulness | 2.90/5 |
+| Relevance | 4.20/5 |
 | Context Recall | 5.00/5 |
-| Completeness | 3.30/5 |
+| Completeness | 3.40/5 |
 
 ## Per-Question Results
 
 | ID | Category | Faithful | Relevant | Recall | Complete | Notes |
 |----|----------|----------|----------|--------|----------|-------|
-| q01 | SLA | 3 | 3 | 5 | 3 | LLM Parse Error |
-| q02 | Refund | 3 | 3 | 5 | 5 | LLM Parse Error |
-| q03 | Access Control | 3 | 3 | 5 | 3 | LLM Parse Error |
-| q04 | Refund | 3 | 3 | 5 | 3 | LLM Parse Error |
-| q05 | IT Helpdesk | 3 | 3 | 5 | 5 | LLM Parse Error |
-| q06 | SLA | 3 | 3 | 5 | 3 | LLM Parse Error |
-| q07 | Access Control | 3 | 3 | 5 | 3 | LLM Parse Error |
-| q08 | HR Policy | 3 | 3 | 5 | 4 | LLM Parse Error |
-| q09 | Insufficient Context | 3 | 3 | None | 1 | LLM Parse Error |
-| q10 | Refund | 3 | 3 | 5 | 3 | LLM Parse Error |
+| q01 | SLA | 2 | 3 | 5 | 4 | coverage=0.10, citations=1 |
+| q02 | Refund | 3 | 5 | 5 | 5 | coverage=0.19, citations=1 |
+| q03 | Access Control | 2 | 5 | 5 | 4 | coverage=0.11, citations=1 |
+| q04 | Refund | 3 | 5 | 5 | 2 | coverage=0.20, citations=1 |
+| q05 | IT Helpdesk | 3 | 5 | 5 | 5 | coverage=0.17, citations=1 |
+| q06 | SLA | 4 | 5 | 5 | 5 | coverage=0.36, citations=2 |
+| q07 | Access Control | 3 | 5 | 5 | 2 | coverage=0.18, citations=1 |
+| q08 | HR Policy | 3 | 5 | 5 | 4 | coverage=0.17, citations=1 |
+| q09 | Insufficient Context | 1 | 1 | None | 1 | coverage=0.03, citations=0 |
+| q10 | Refund | 5 | 3 | 5 | 2 | Abstain response detected |
