@@ -32,7 +32,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 DOCS_DIR = Path(__file__).parent / "data" / "docs"
 CHROMA_DB_DIR = Path(__file__).parent / "chroma_db"
 
-# TODO Sprint 1: Điều chỉnh chunk size và overlap theo quyết định của nhóm
+
 # Gợi ý từ slide: chunk 300-500 tokens, overlap 50-80 tokens
 CHUNK_SIZE = 400       # tokens (ước lượng bằng số ký tự / 4)
 CHUNK_OVERLAP = 80     # tokens overlap giữa các chunk
@@ -56,12 +56,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
           - "text": nội dung đã clean
           - "metadata": dict với source, department, effective_date, access
 
-    TODO Sprint 1:
-    - Extract metadata từ dòng đầu file (Source, Department, Effective Date, Access)
-    - Bỏ các dòng header metadata khỏi nội dung chính
-    - Normalize khoảng trắng, xóa ký tự rác
 
-    Gợi ý: dùng regex để parse dòng "Key: Value" ở đầu file.
     """
     lines = raw_text.strip().split("\n")
     metadata = {
@@ -76,7 +71,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
 
     for line in lines:
         if not header_done:
-            # TODO: Parse metadata từ các dòng "Key: Value"
+
             # Ví dụ: "Source: policy/refund-v4.pdf" → metadata["source"] = "policy/refund-v4.pdf"
             if line.startswith("Source:"):
                 metadata["source"] = line.replace("Source:", "").strip()
@@ -98,7 +93,7 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
 
     cleaned_text = "\n".join(content_lines)
 
-    # TODO: Thêm bước normalize text nếu cần
+
     # Gợi ý: bỏ ký tự đặc biệt thừa, chuẩn hóa dấu câu
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)  # max 2 dòng trống liên tiếp
 
@@ -125,20 +120,13 @@ def chunk_document(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
           - "text": nội dung chunk
           - "metadata": metadata gốc + "section" của chunk đó
 
-    TODO Sprint 1:
-    1. Split theo heading "=== Section ... ===" hoặc "=== Phần ... ===" trước
-    2. Nếu section quá dài (> CHUNK_SIZE * 4 ký tự), split tiếp theo paragraph
-    3. Thêm overlap: lấy đoạn cuối của chunk trước vào đầu chunk tiếp theo
-    4. Mỗi chunk PHẢI giữ metadata đầy đủ từ tài liệu gốc
 
-    Gợi ý: Ưu tiên cắt tại ranh giới tự nhiên (section, paragraph)
-    thay vì cắt theo token count cứng.
     """
     text = doc["text"]
     base_metadata = doc["metadata"].copy()
     chunks = []
 
-    # TODO: Implement chunking theo section heading
+
     # Bước 1: Split theo heading pattern "=== ... ==="
     sections = re.split(r"(===.*?===)", text)
 
@@ -183,9 +171,7 @@ def _split_by_size(
     """
     Helper: Split text dài thành chunks với overlap.
 
-    TODO Sprint 1:
-    Hiện tại dùng split đơn giản theo ký tự.
-    Cải thiện: split theo paragraph (\n\n) trước, rồi mới ghép đến khi đủ size.
+
     """
     if len(text) <= chunk_chars:
         # Toàn bộ section vừa một chunk
@@ -228,22 +214,7 @@ def get_embedding(text: str) -> List[float]:
     """
     Tạo embedding vector cho một đoạn text.
 
-    TODO Sprint 1:
-    Chọn một trong hai:
 
-    Option A — OpenAI Embeddings (cần OPENAI_API_KEY):
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.embeddings.create(
-            input=text,
-            model="text-embedding-3-small"
-        )
-        return response.data[0].embedding
-
-    Option B — Sentence Transformers (chạy local, không cần API key):
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-        return model.encode(text).tolist()
     """
     response = client.embeddings.create(
         input=text,
@@ -256,23 +227,7 @@ def build_index(docs_dir: Path = DOCS_DIR, db_dir: Path = CHROMA_DB_DIR) -> None
     """
     Pipeline hoàn chỉnh: đọc docs → preprocess → chunk → embed → store.
 
-    TODO Sprint 1:
-    1. Cài thư viện: pip install chromadb
-    2. Khởi tạo ChromaDB client và collection
-    3. Với mỗi file trong docs_dir:
-       a. Đọc nội dung
-       b. Gọi preprocess_document()
-       c. Gọi chunk_document()
-       d. Với mỗi chunk: gọi get_embedding() và upsert vào ChromaDB
-    4. In số lượng chunk đã index
 
-    Gợi ý khởi tạo ChromaDB:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(db_dir))
-        collection = client.get_or_create_collection(
-            name="rag_lab",
-            metadata={"hnsw:space": "cosine"}
-        )
     """
     import chromadb
 
@@ -334,12 +289,7 @@ def list_chunks(db_dir: Path = CHROMA_DB_DIR, n: int = 5) -> None:
     """
     In ra n chunk đầu tiên trong ChromaDB để kiểm tra chất lượng index.
 
-    TODO Sprint 1:
-    Implement sau khi hoàn thành build_index().
-    Kiểm tra:
-    - Chunk có giữ đủ metadata không? (source, section, effective_date)
-    - Chunk có bị cắt giữa điều khoản không?
-    - Metadata effective_date có đúng không?
+
     """
     try:
         import chromadb
@@ -379,7 +329,7 @@ def inspect_metadata_coverage(db_dir: Path = CHROMA_DB_DIR) -> None:
 
         print(f"\nTổng chunks: {len(results['metadatas'])}")
 
-        # TODO: Phân tích metadata
+
         # Đếm theo department, kiểm tra effective_date missing, v.v.
         departments = {}
         missing_date = 0
