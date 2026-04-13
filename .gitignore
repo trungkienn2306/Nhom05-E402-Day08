@@ -1,6 +1,42 @@
 .DS_Store
 *.swp
 *~
-*.env
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.manifest
+*.spec
+
+# Environmental variables
+.env
+.env.*
+!.env.example
 # Grading questions — không public trước 17:00
 day08/lab/data/grading_questions.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+*.db
+
+# Testing
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
