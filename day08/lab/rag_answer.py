@@ -24,8 +24,17 @@ Definition of Done Sprint 3:
 import os
 from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
+import chromadb
+from index import get_embedding, CHROMA_DB_DIR
+from openai import OpenAI
+
 
 load_dotenv()
+
+# Khởi tạo clients ở global level để tái sử dụng (Performance Optimization)
+chroma_client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 # =============================================================================
 # CẤU HÌNH
@@ -76,10 +85,26 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
         # Lưu ý: distances trong ChromaDB cosine = 1 - similarity
         # Score = 1 - distance
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement retrieve_dense().\n"
-        "Tham khảo comment trong hàm để biết cách query ChromaDB."
+    collection = chroma_client.get_collection("rag_lab")
+
+    query_embedding = get_embedding(query)
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"]
     )
+    formatted_results = []
+    if results["documents"]:
+        for i in range(len(results["documents"][0])):
+            formatted_results.append({
+                "text": results["documents"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "score": 1 - results["distances"][0][i] 
+            })
+    
+    return formatted_results
+
 
 
 # =============================================================================
@@ -274,18 +299,20 @@ def build_grounded_prompt(query: str, context_block: str) -> str:
     - Thêm ngôn ngữ phản hồi (tiếng Việt vs tiếng Anh)
     - Điều chỉnh tone phù hợp với use case (CS helpdesk, IT support)
     """
-    prompt = f"""Answer only from the retrieved context below.
-If the context is insufficient to answer the question, say you do not know and do not make up information.
-Cite the source field (in brackets like [1]) when possible.
-Keep your answer short, clear, and factual.
-Respond in the same language as the question.
+    prompt = f"""
+    Answer only from the retrieved context below.
+    If the context is insufficient to answer the question, say you do not know and do not make up information.
+    Cite the source field (in brackets like [1]) when possible.
+    Keep your answer short, clear, and factual.
+    Respond in the same language as the question.
 
-Question: {query}
+    Question: {query}
 
-Context:
-{context_block}
+    Context:
+    {context_block}
 
-Answer:"""
+    Answer:
+    """
     return prompt
 
 
@@ -316,10 +343,14 @@ def call_llm(prompt: str) -> str:
 
     Lưu ý: Dùng temperature=0 hoặc thấp để output ổn định cho evaluation.
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement call_llm().\n"
-        "Chọn Option A (OpenAI) hoặc Option B (Gemini) trong TODO comment."
-    )
+
+    response = openai_client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,    
+            max_tokens=512,
+        )
+    return response.choices[0].message.content
 
 
 def rag_answer(
