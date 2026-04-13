@@ -59,4 +59,3 @@ Nếu có thêm thời gian, em sẽ làm hai việc. Thứ nhất, thử xây m
 
 ---
 
-*Lưu file này với tên: `reports/individual/bui_the_cong.md`*
