@@ -21,8 +21,12 @@ Definition of Done Sprint 3:
   ✓ Giải thích được tại sao chọn biến đó để tune
 """
 
+import argparse
+import math
 import os
-from typing import List, Dict, Any, Optional, Tuple
+import re
+from collections import Counter
+from typing import List, Dict, Any
 from dotenv import load_dotenv
 import chromadb
 from index import get_embedding, CHROMA_DB_DIR
@@ -44,6 +48,23 @@ TOP_K_SEARCH = 10    # Số chunk lấy từ vector store trước rerank (searc
 TOP_K_SELECT = 3     # Số chunk gửi vào prompt sau rerank/select (top-3 sweet spot)
 
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
+
+def _tokenize(text: str) -> List[str]:
+    return re.findall(r"\w+", text.lower())
+
+
+def _normalize_scores(rows: List[Dict[str, Any]], key: str) -> None:
+    if not rows:
+        return
+    raw = [float(r.get(key, 0.0) or 0.0) for r in rows]
+    min_s, max_s = min(raw), max(raw)
+    if math.isclose(max_s, min_s):
+        for r in rows:
+            r[key] = 1.0 if max_s > 0 else 0.0
+        return
+    for r, s in zip(rows, raw):
+        r[key] = (s - min_s) / (max_s - min_s)
 
 
 # =============================================================================
@@ -103,9 +124,39 @@ def retrieve_sparse(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any
 
     """
 
-    # Tạm thời return empty list
-    print("[retrieve_sparse] Chưa implement — Sprint 3")
-    return []
+    collection = chroma_client.get_collection("rag_lab")
+    corpus = collection.get(include=["documents", "metadatas"])
+
+    docs = corpus.get("documents", []) or []
+    metas = corpus.get("metadatas", []) or []
+    if not docs:
+        return []
+
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return []
+
+    query_counts = Counter(query_tokens)
+    scored: List[Dict[str, Any]] = []
+    for idx, doc in enumerate(docs):
+        doc_tokens = _tokenize(doc)
+        if not doc_tokens:
+            continue
+        doc_counts = Counter(doc_tokens)
+        overlap = sum(min(query_counts[t], doc_counts[t]) for t in query_counts)
+        coverage = overlap / max(len(query_tokens), 1)
+        if overlap == 0:
+            continue
+        scored.append(
+            {
+                "text": doc,
+                "metadata": metas[idx] if idx < len(metas) else {},
+                "score": coverage,
+            }
+        )
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored[:top_k]
 
 
 # =============================================================================
@@ -131,9 +182,33 @@ def retrieve_hybrid(
 
     """
 
-    # Tạm thời fallback về dense
-    print("[retrieve_hybrid] Chưa implement RRF — fallback về dense")
-    return retrieve_dense(query, top_k)
+    dense_rows = retrieve_dense(query, top_k=top_k)
+    sparse_rows = retrieve_sparse(query, top_k=top_k)
+
+    _normalize_scores(dense_rows, "score")
+    _normalize_scores(sparse_rows, "score")
+
+    merged: Dict[str, Dict[str, Any]] = {}
+
+    def _merge(rows: List[Dict[str, Any]], weight: float) -> None:
+        for row in rows:
+            meta = row.get("metadata", {})
+            doc_id = f"{meta.get('source', '')}|{meta.get('section', '')}|{row.get('text', '')[:80]}"
+            weighted_score = weight * float(row.get("score", 0.0) or 0.0)
+            if doc_id not in merged:
+                merged[doc_id] = {
+                    "text": row.get("text", ""),
+                    "metadata": meta,
+                    "score": weighted_score,
+                }
+            else:
+                merged[doc_id]["score"] += weighted_score
+
+    _merge(dense_rows, dense_weight)
+    _merge(sparse_rows, sparse_weight)
+
+    ranked = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+    return ranked[:top_k]
 
 
 # =============================================================================
@@ -342,6 +417,83 @@ def rag_answer(
     }
 
 
+def retrieve_context_baseline(query: str, k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
+    """Sprint 2 baseline retrieval: dense only."""
+    return retrieve_dense(query, top_k=k)
+
+
+def retrieve_context_variant(
+    query: str,
+    k: int = TOP_K_SEARCH,
+    retrieval_mode: str = "hybrid",
+) -> List[Dict[str, Any]]:
+    """
+    Sprint 3 variant retrieval: kế thừa baseline và chỉ đổi logic retrieval.
+    """
+    if retrieval_mode == "dense":
+        return retrieve_dense(query, top_k=k)
+    if retrieval_mode == "sparse":
+        return retrieve_sparse(query, top_k=k)
+    if retrieval_mode == "hybrid":
+        return retrieve_hybrid(query, top_k=k)
+    raise ValueError(f"retrieval_mode không hợp lệ cho variant: {retrieval_mode}")
+
+
+def generate_answer(query: str, contexts: List[Dict[str, Any]], verbose: bool = False) -> str:
+    """
+    Generation layer dùng chung cho baseline và variant (giữ nguyên logic Sprint 2).
+    """
+    context_block = build_context_block(contexts)
+    prompt = build_grounded_prompt(query, context_block)
+    if verbose:
+        print(f"\n[RAG] Prompt:\n{prompt[:500]}...\n")
+    return call_llm(prompt)
+
+
+def rag_answer_ab(
+    query: str,
+    mode: str = "baseline",
+    variant_retrieval_mode: str = "hybrid",
+    top_k_search: int = TOP_K_SEARCH,
+    top_k_select: int = TOP_K_SELECT,
+    use_rerank: bool = False,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Luồng A/B chuẩn:
+      baseline -> retrieve_context_baseline -> generate_answer
+      variant  -> retrieve_context_variant  -> generate_answer
+    """
+    if mode == "baseline":
+        candidates = retrieve_context_baseline(query, k=top_k_search)
+    elif mode == "variant":
+        candidates = retrieve_context_variant(query, k=top_k_search, retrieval_mode=variant_retrieval_mode)
+    else:
+        raise ValueError(f"mode không hợp lệ: {mode}")
+
+    if use_rerank:
+        candidates = rerank(query, candidates, top_k=top_k_select)
+    else:
+        candidates = candidates[:top_k_select]
+
+    answer = generate_answer(query, candidates, verbose=verbose)
+    sources = list({c.get("metadata", {}).get("source", "unknown") for c in candidates})
+
+    return {
+        "query": query,
+        "answer": answer,
+        "sources": sources,
+        "chunks_used": candidates,
+        "config": {
+            "mode": mode,
+            "variant_retrieval_mode": variant_retrieval_mode if mode == "variant" else "dense",
+            "top_k_search": top_k_search,
+            "top_k_select": top_k_select,
+            "use_rerank": use_rerank,
+        },
+    }
+
+
 # =============================================================================
 # SPRINT 3: SO SÁNH BASELINE VS VARIANT
 # =============================================================================
@@ -375,43 +527,24 @@ def compare_retrieval_strategies(query: str) -> None:
 # =============================================================================
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="RAG QA (baseline/variant)")
+    parser.add_argument("--mode", choices=["baseline", "variant"], default="baseline")
+    parser.add_argument("--query", default="SLA xử lý ticket P1 là bao lâu?")
+    parser.add_argument("--retrieval-mode", choices=["dense", "sparse", "hybrid"], default="hybrid")
+    parser.add_argument("--use-rerank", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args()
+
+    result = rag_answer_ab(
+        query=args.query,
+        mode=args.mode,
+        variant_retrieval_mode=args.retrieval_mode,
+        use_rerank=args.use_rerank,
+        verbose=args.verbose,
+    )
     print("=" * 60)
-    print("Sprint 2 + 3: RAG Answer Pipeline")
-    print("=" * 60)
-
-    # Test queries từ data/test_questions.json
-    test_queries = [
-        "SLA xử lý ticket P1 là bao lâu?",
-        "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
-        "Ai phải phê duyệt để cấp quyền Level 3?",
-        "ERR-403-AUTH là lỗi gì?",  # Query không có trong docs → kiểm tra abstain
-    ]
-
-    print("\n--- Sprint 2: Test Baseline (Dense) ---")
-    for query in test_queries:
-        print(f"\nQuery: {query}")
-        try:
-            result = rag_answer(query, retrieval_mode="dense", verbose=True)
-            print(f"Answer: {result['answer']}")
-            print(f"Sources: {result['sources']}")
-        except NotImplementedError:
-            print("Chưa implement — hoàn thành TODO trong retrieve_dense() và call_llm() trước.")
-        except Exception as e:
-            print(f"Lỗi: {e}")
-
-    # Uncomment sau khi Sprint 3 hoàn thành:
-    # print("\n--- Sprint 3: So sánh strategies ---")
-    # compare_retrieval_strategies("Approval Matrix để cấp quyền là tài liệu nào?")
-    # compare_retrieval_strategies("ERR-403-AUTH")
-
-    print("\n\nViệc cần làm Sprint 2:")
-    print("  1. Implement retrieve_dense() — query ChromaDB")
-    print("  2. Implement call_llm() — gọi OpenAI hoặc Gemini")
-    print("  3. Chạy rag_answer() với 3+ test queries")
-    print("  4. Verify: output có citation không? Câu không có docs → abstain không?")
-
-    print("\nViệc cần làm Sprint 3:")
-    print("  1. Chọn 1 trong 3 variants: hybrid, rerank, hoặc query transformation")
-    print("  2. Implement variant đó")
-    print("  3. Chạy compare_retrieval_strategies() để thấy sự khác biệt")
-    print("  4. Ghi lý do chọn biến đó vào docs/tuning-log.md")
+    print(f"Mode: {args.mode}")
+    print(f"Query: {result['query']}")
+    print(f"Sources: {result['sources']}")
+    print("-" * 60)
+    print(result["answer"])

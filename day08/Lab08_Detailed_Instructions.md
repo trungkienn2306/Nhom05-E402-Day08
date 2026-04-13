@@ -18,10 +18,13 @@ Thời lượng thực hành chia làm 4 Sprint, mỗi Sprint 60 phút:
   
 - [ ] **Sprint 2 — Baseline Retrieval + Answer (Lấy ngữ cảnh & Trả lời):**
   - *Code (`rag_answer.py`):* Truy vấn vector database ChromaDB bằng Dense Retrieval và đẩy ngữ cảnh cho LLM (OpenAI/Gemini) để trả lời.
+  - *Yêu cầu kiến trúc (bắt buộc để nối Sprint 3):* Tách rõ 2 hàm `retrieve_context_baseline(query, k)` và `generate_answer(query, contexts)` để Sprint 3 chỉ thay logic retrieval, không đụng phần generation.
   - *Kiểm tra:* Kiểm tra test case. Câu hỏi có trong tài liệu phải có trích dẫn `[1]`, câu hỏi không có dữ liệu thực tế (như lỗi không có thực) hệ thống phải từ chối trả lời (abstain).
 
 - [ ] **Sprint 3 — Tuning Tối Thiểu (Tối ưu hệ thống RAG):**
-  - *Code (`rag_answer.py`):* Nâng cấp chất lượng truy xuất. Chọn 1 trong 3 hướng đi: **Hybrid Search** (Sparse/BM25 + Dense), **Rerank** (Dùng cross-encoder đánh giá lại độ ưu tiên), hoặc **Query Transform** (Viết lại/Mở rộng câu hỏi query).
+  - *Code (`rag_answer.py`):* Nâng cấp chất lượng truy xuất bằng cách **kế thừa retrieval của Sprint 2**. Chọn 1 trong 3 hướng đi: **Hybrid Search** (Sparse/BM25 + Dense), **Rerank** (Dùng cross-encoder đánh giá lại độ ưu tiên), hoặc **Query Transform** (Viết lại/Mở rộng câu hỏi query).
+  - *Ràng buộc triển khai:* Tạo thêm hàm `retrieve_context_variant(query, k)` và giữ nguyên `generate_answer(...)` của Sprint 2. Luồng variant phải là: `query -> retrieve_context_variant -> generate_answer`.
+  - *A/B bắt buộc:* Trong cùng `rag_answer.py`, có cờ `--mode baseline|variant` (hoặc biến cấu hình tương đương) để chạy cùng một pipeline với 2 retrieval khác nhau. Không tách thành 2 script độc lập.
   - *Tài liệu:* So sánh kết quả của bản mới nâng cấp (variant) với phiên bản gốc (baseline). Ghi chú những tinh chỉnh này vào `docs/tuning-log.md`.
 
 - [ ] **Sprint 4 — Evaluation + Docs + Report (Đánh giá và Báo cáo):**
@@ -42,6 +45,18 @@ Tham gia nhóm, cần phân bổ nhiệm vụ rõ ràng:
 | **Documentation Owner** | Lập tài liệu (Documentation) | Tổng hợp kiến trúc, sơ đồ(`architecture.md`), viết logic quá trình tuning, phân tích thay đổi biến số (`tuning-log.md`). | Sprint 4 |
 
 > **Lưu ý yêu cầu cá nhân (40 Điểm):** Dù code chung nhưng **mỗi người đều phải nộp một báo cáo riêng chuyên sâu 500-800 từ (Individual Report)** phân tích rõ sự đóng góp, chọn phân tích nguyên nhân 1 lỗi trong 1 câu hỏi đánh giá thực tế và rút ra kinh nghiệm để lấy điểm cá nhân (40/100đ lab). 
+
+---
+
+## 3.1 Logic Liên Kết Giữa Sprint 1 -> Sprint 2 -> Sprint 3 (Bắt buộc)
+
+- **Sprint 1 (Indexing) tạo dữ liệu nền:** sinh chunks + metadata và lưu ChromaDB. Nếu metadata sai hoặc chunks kém, Sprint 2 và Sprint 3 đều giảm chất lượng.
+- **Sprint 2 (Baseline) tạo mốc chuẩn:** dùng `retrieve_context_baseline` + `generate_answer` để có chất lượng gốc làm chuẩn so sánh.
+- **Sprint 3 (Variant) chỉ nâng retrieval:** mọi tối ưu phải đi qua `retrieve_context_variant`, còn bước generate giữ nguyên từ Sprint 2 để đảm bảo so sánh công bằng.
+- **Nguyên tắc thực nghiệm:** chỉ đổi 1 biến chính ở Sprint 3 (Hybrid hoặc Rerank hoặc Query Transform), tránh đổi nhiều yếu tố cùng lúc gây khó kết luận.
+- **Kết quả mong muốn:** `variant` cải thiện retrieval quality (precision/recall của context) và kéo theo chất lượng answer tốt hơn khi chạy `eval.py` ở Sprint 4.
+
+> ✅ Checklist xác nhận đã "nối logic đúng": cùng nguồn index (Sprint 1), cùng generate function (Sprint 2), khác retrieval strategy (Sprint 3), và đo A/B trên cùng bộ câu hỏi.
 
 ---
 
