@@ -31,6 +31,11 @@ from openai import OpenAI
 
 load_dotenv()
 
+# Khởi tạo clients ở global level để tái sử dụng (Performance Optimization)
+chroma_client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 # =============================================================================
 # CẤU HÌNH
 # =============================================================================
@@ -80,8 +85,7 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
         # Lưu ý: distances trong ChromaDB cosine = 1 - similarity
         # Score = 1 - distance
     """
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
-    collection = client.get_collection("rag_lab")
+    collection = chroma_client.get_collection("rag_lab")
 
     query_embedding = get_embedding(query)
 
@@ -340,8 +344,7 @@ def call_llm(prompt: str) -> str:
     Lưu ý: Dùng temperature=0 hoặc thấp để output ổn định cho evaluation.
     """
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    response = client.chat.completions.create(
+    response = openai_client.chat.completions.create(
             model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,    
