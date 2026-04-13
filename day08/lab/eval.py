@@ -4,6 +4,7 @@ eval.py — Sprint 4: Evaluation & Scorecard (Manual Scoring)
 
 import csv
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -40,6 +41,11 @@ VARIANT_CONFIG = {
     "label": "variant_hybrid",
 }
 
+# Bật LLM-as-Judge bằng biến môi trường:
+#   USE_LLM_JUDGE=1  -> dùng judge LLM cho faithfulness/relevance/completeness
+#   USE_LLM_JUDGE=0  -> dùng manual scoring (mặc định hiện tại)
+USE_LLM_JUDGE = os.getenv("USE_LLM_JUDGE", "0").strip().lower() in {"1", "true", "yes", "y"}
+
 
 def _tokenize(text: str) -> List[str]:
     return re.findall(r"\w+", (text or "").lower())
@@ -74,10 +80,63 @@ def _coverage_ratio(answer: str, reference: str, stop: Optional[Set[str]] = None
     return len(ans_tokens & ref_tokens) / len(ref_tokens)
 
 
+def _safe_int_score(value: Any, default: int = 3) -> int:
+    try:
+        score = int(value)
+    except Exception:
+        return default
+    return max(1, min(5, score))
+
+
+def _extract_json_obj(raw: str) -> Dict[str, Any]:
+    text = (raw or "").strip()
+    text = text.replace("```json", "").replace("```", "").strip()
+    if not text.startswith("{"):
+        m = re.search(r"\{.*\}", text, flags=re.DOTALL)
+        if m:
+            text = m.group(0)
+    return json.loads(text)
+
+
+def _judge_with_llm(prompt: str, score_key: str = "score", reason_key: str = "reason") -> Dict[str, Any]:
+    from rag_answer import call_llm
+
+    try:
+        raw = call_llm(prompt)
+        obj = _extract_json_obj(raw)
+        return {
+            "score": _safe_int_score(obj.get(score_key)),
+            "notes": str(obj.get(reason_key, "LLM judge")),
+        }
+    except Exception:
+        return {"score": 3, "notes": "LLM judge parse error"}
+
+
 def score_faithfulness(answer: str, chunks_used: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Manual rule-based faithfulness (không dùng LLM judge).
     """
+    if USE_LLM_JUDGE:
+        context_text = "\n\n".join(c.get("text", "") for c in chunks_used[:5])
+        prompt = f"""
+You are a strict RAG evaluator.
+Evaluate FAITHFULNESS of the answer against retrieved context.
+
+Answer:
+{answer}
+
+Retrieved context:
+{context_text}
+
+Scoring rubric (1-5):
+- 5 = fully grounded, no hallucination
+- 1 = mostly unsupported/hallucinated
+
+Return ONLY JSON:
+{{"score": 1-5, "reason": "short reason"}}
+"""
+        return _judge_with_llm(prompt, "score", "reason")
+
     if not answer:
         return {"score": 1, "notes": "Empty answer"}
     if _is_abstain(answer):
@@ -109,6 +168,26 @@ def score_answer_relevance(query: str, answer: str) -> Dict[str, Any]:
     """
     Manual relevance based on lexical overlap between query and answer.
     """
+    if USE_LLM_JUDGE:
+        prompt = f"""
+You are a strict RAG evaluator.
+Evaluate ANSWER RELEVANCE for the given question.
+
+Question:
+{query}
+
+Answer:
+{answer}
+
+Scoring rubric (1-5):
+- 5 = directly and clearly answers the question
+- 1 = irrelevant / does not answer
+
+Return ONLY JSON:
+{{"score": 1-5, "reason": "short reason"}}
+"""
+        return _judge_with_llm(prompt, "score", "reason")
+
     if not answer:
         return {"score": 1, "notes": "Empty answer"}
     if _is_abstain(answer):
@@ -163,6 +242,29 @@ def score_completeness(query: str, answer: str, expected_answer: str) -> Dict[st
     """
     Manual completeness based on expected answer coverage.
     """
+    if USE_LLM_JUDGE:
+        prompt = f"""
+You are a strict RAG evaluator.
+Evaluate COMPLETENESS by comparing model answer vs expected answer.
+
+Question:
+{query}
+
+Expected answer:
+{expected_answer}
+
+Model answer:
+{answer}
+
+Scoring rubric (1-5):
+- 5 = covers all key points
+- 1 = misses most key points
+
+Return ONLY JSON:
+{{"score": 1-5, "missing_points": "short note"}}
+"""
+        return _judge_with_llm(prompt, "score", "missing_points")
+
     if not expected_answer:
         return {"score": 5, "notes": "No expected answer provided"}
     if not answer:
@@ -258,25 +360,75 @@ def run_scorecard(
     return results
 
 
-def compare_ab(baseline_results: List[Dict[str, Any]], variant_results: List[Dict[str, Any]], output_csv: Optional[str] = None) -> None:
+def compare_ab(
+    baseline_results: List[Dict],
+    variant_results: List[Dict],
+    output_csv: Optional[str] = None,
+) -> None:
+    """
+    So sánh baseline vs variant theo từng câu hỏi và tổng thể.
+
+    TODO Sprint 4:
+    Điền vào bảng sau để trình bày trong báo cáo:
+
+    | Metric          | Baseline | Variant | Delta |
+    |-----------------|----------|---------|-------|
+    | Faithfulness    |   ?/5    |   ?/5   |  +/?  |
+    | Answer Relevance|   ?/5    |   ?/5   |  +/?  |
+    | Context Recall  |   ?/5    |   ?/5   |  +/?  |
+    | Completeness    |   ?/5    |   ?/5   |  +/?  |
+
+    Câu hỏi cần trả lời:
+    - Variant tốt hơn baseline ở câu nào? Vì sao?
+    - Biến nào (chunking / hybrid / rerank) đóng góp nhiều nhất?
+    - Có câu nào variant lại kém hơn baseline không? Tại sao?
+    """
     metrics = ["faithfulness", "relevance", "context_recall", "completeness"]
-    print(f"\n{'=' * 70}\nA/B Comparison: Baseline vs Variant\n{'=' * 70}")
+
+    print(f"\n{'='*70}")
+    print("A/B Comparison: Baseline vs Variant")
+    print('='*70)
     print(f"{'Metric':<20} {'Baseline':>10} {'Variant':>10} {'Delta':>8}")
     print("-" * 55)
 
     for metric in metrics:
-        b = [r[metric] for r in baseline_results if r[metric] is not None]
-        v = [r[metric] for r in variant_results if r[metric] is not None]
-        b_avg = sum(b) / len(b) if b else None
-        v_avg = sum(v) / len(v) if v else None
-        delta = (v_avg - b_avg) if (b_avg is not None and v_avg is not None) else None
-        print(
-            f"{metric:<20} "
-            f"{(f'{b_avg:.2f}' if b_avg is not None else 'N/A'):>10} "
-            f"{(f'{v_avg:.2f}' if v_avg is not None else 'N/A'):>10} "
-            f"{(f'{delta:+.2f}' if delta is not None else 'N/A'):>8}"
-        )
+        b_scores = [r[metric] for r in baseline_results if r[metric] is not None]
+        v_scores = [r[metric] for r in variant_results if r[metric] is not None]
 
+        b_avg = sum(b_scores) / len(b_scores) if b_scores else None
+        v_avg = sum(v_scores) / len(v_scores) if v_scores else None
+        delta = (v_avg - b_avg) if (b_avg and v_avg) else None
+
+        b_str = f"{b_avg:.2f}" if b_avg else "N/A"
+        v_str = f"{v_avg:.2f}" if v_avg else "N/A"
+        d_str = f"{delta:+.2f}" if delta else "N/A"
+
+        print(f"{metric:<20} {b_str:>10} {v_str:>10} {d_str:>8}")
+
+    # Per-question comparison
+    print(f"\n{'Câu':<6} {'Baseline F/R/Rc/C':<22} {'Variant F/R/Rc/C':<22} {'Better?':<10}")
+    print("-" * 65)
+
+    b_by_id = {r["id"]: r for r in baseline_results}
+    for v_row in variant_results:
+        qid = v_row["id"]
+        b_row = b_by_id.get(qid, {})
+
+        b_scores_str = "/".join([
+            str(b_row.get(m, "?")) for m in metrics
+        ])
+        v_scores_str = "/".join([
+            str(v_row.get(m, "?")) for m in metrics
+        ])
+
+        # So sánh đơn giản
+        b_total = sum(b_row.get(m, 0) or 0 for m in metrics)
+        v_total = sum(v_row.get(m, 0) or 0 for m in metrics)
+        better = "Variant" if v_total > b_total else ("Baseline" if b_total > v_total else "Tie")
+
+        print(f"{qid:<6} {b_scores_str:<22} {v_scores_str:<22} {better:<10}")
+
+    # Export to CSV
     if output_csv:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         csv_path = RESULTS_DIR / output_csv

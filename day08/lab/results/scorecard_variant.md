@@ -1,5 +1,5 @@
 # Scorecard: variant_hybrid
-Generated: 2026-04-13 17:23
+Generated: 2026-04-13 17:54
 
 ## Summary
 
@@ -14,7 +14,7 @@ Generated: 2026-04-13 17:23
 
 | ID | Category | Faithful | Relevant | Recall | Complete | Notes |
 |----|----------|----------|----------|--------|----------|-------|
-| q01 | SLA | 2 | 3 | 5 | 4 | coverage=0.10, citations=1 |
+| q01 | SLA | 2 | 3 | 5 | 4 | coverage=0.12, citations=1 |
 | q02 | Refund | 3 | 5 | 5 | 5 | coverage=0.19, citations=1 |
 | q03 | Access Control | 2 | 5 | 5 | 4 | coverage=0.11, citations=1 |
 | q04 | Refund | 3 | 5 | 5 | 2 | coverage=0.20, citations=1 |
