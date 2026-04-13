@@ -34,15 +34,11 @@ Tôi cũng hiểu sâu hơn về **thiết kế 2 tầng**: tầng 1 ưu tiên c
 
 ## 3. Điều tôi ngạc nhiên hoặc gặp khó khăn (100-150 từ)
 
-Điều tôi không ngờ nhất là **môi trường Python** tốn nhiều thời gian hơn tôi nghĩ.
 
 Ban đầu tôi chạy thẳng `python index.py` trong PowerShell và nhận được lỗi `Python was not found` dù đã cài PyCharm. Hóa ra terminal ngoài không nhận diện Python của PyCharm — phải activate đúng virtual environment `.venv` bằng lệnh `& ".venv\Scripts\Activate.ps1"`.
 
 Ngoài ra, tôi gặp lỗi `chromadb.errors.NotFoundError` khi thử `delete_collection("rag_lab")` lần đầu chạy. Hướng dẫn bắt `except ValueError` nhưng phiên bản ChromaDB mới raise `NotFoundError` — đây là **breaking change** giữa các phiên bản thư viện. Bài học: không nên bắt exception quá hẹp, `except Exception` an toàn hơn trong trường hợp này.
 
-Tổng cộng mất khoảng 20 phút chỉ để setup môi trường thay vì code — đây là lý do tại sao setup môi trường cần được làm sớm nhất trong mỗi sprint.
-
----
 
 ## 4. Phân tích một câu hỏi trong grading_questions (150-200 từ)
 
