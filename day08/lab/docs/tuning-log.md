@@ -111,3 +111,113 @@ Không thực hiện để tránh vi phạm A/B rule trong khung thời gian lab
 - Variant judge: `results/scorecard_variant_judge.md`
 - Grading run chính: `logs/grading_run.json`
 - Grading run judge (so sánh): `logs/grading_run_judge.json`
+
+
+---
+
+## [AUTO] Experiment Log — 2026-04-13 18:55
+
+**Biến thay đổi:** `retrieval_mode`: `dense` → `hybrid` + `use_rerank`: `False` → `True`
+
+**Lý do chọn biến này:**
+> Corpus IT Helpdesk có 2 loại query:
+> 1. Câu ngôn ngữ tự nhiên ("Chính sách hoàn tiền như thế nào?") → Dense mạnh
+> 2. Keyword chính xác ("ERR-403", "P1 ticket", "Level 3 access") → BM25 mạnh
+> Hybrid RRF kết hợp cả 2 để không bỏ sót câu hỏi dạng nào.
+> CrossEncoder rerank loại bỏ chunk noise sau khi search rộng.
+
+**Baseline Config:** `baseline_dense`
+```
+retrieval_mode = "dense"
+top_k_search   = 10
+top_k_select   = 3
+use_rerank     = False
+```
+
+**Variant Config:** `variant_hybrid_rerank`
+```
+retrieval_mode = "hybrid"
+top_k_search   = 10
+top_k_select   = 3
+use_rerank     = True
+reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+```
+
+**Tổng câu hỏi chạy:** 1
+
+**Quan sát cải thiện (Variant > Baseline):**
+- [q01] Variant retrieve được 4 chunks vs 3 (baseline)
+
+**Quan sát hồi quy (Baseline > Variant):**
+- Không có
+
+**Scorecard Variant 1:**
+| Metric | Baseline | Variant 1 | Delta |
+|--------|----------|-----------|-------|
+| Faithfulness | ?/5 | ?/5 | +/- |
+| Answer Relevance | ?/5 | ?/5 | +/- |
+| Context Recall | ?/5 | ?/5 | +/- |
+| Completeness | ?/5 | ?/5 | +/- |
+
+> **TODO:** Điền bảng trên sau khi chạy `python eval.py` (Sprint 4)
+
+**Kết luận sơ bộ:**
+> Hybrid + Rerank dự kiến cải thiện Context Recall cho query dạng keyword (ERR-403, Level 3).
+> Xác nhận bằng số liệu eval.py.
+
+**Notes:** [DRY RUN TEST] Không phải kết quả thực tế
+
+
+---
+
+## [AUTO] Experiment Log — 2026-04-13 18:56
+
+**Biến thay đổi:** `retrieval_mode`: `dense` → `hybrid` + `use_rerank`: `False` → `True`
+
+**Lý do chọn biến này:**
+> Corpus IT Helpdesk có 2 loại query:
+> 1. Câu ngôn ngữ tự nhiên ("Chính sách hoàn tiền như thế nào?") → Dense mạnh
+> 2. Keyword chính xác ("ERR-403", "P1 ticket", "Level 3 access") → BM25 mạnh
+> Hybrid RRF kết hợp cả 2 để không bỏ sót câu hỏi dạng nào.
+> CrossEncoder rerank loại bỏ chunk noise sau khi search rộng.
+
+**Baseline Config:** `baseline_dense`
+```
+retrieval_mode = "dense"
+top_k_search   = 10
+top_k_select   = 3
+use_rerank     = False
+```
+
+**Variant Config:** `variant_hybrid_rerank`
+```
+retrieval_mode = "hybrid"
+top_k_search   = 10
+top_k_select   = 3
+use_rerank     = True
+reranker_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+```
+
+**Tổng câu hỏi chạy:** 10
+
+**Quan sát cải thiện (Variant > Baseline):**
+- (Chưa có dữ liệu scorecard — chạy eval.py để lấy điểm số)
+
+**Quan sát hồi quy (Baseline > Variant):**
+- Không có
+
+**Scorecard Variant 1:**
+| Metric | Baseline | Variant 1 | Delta |
+|--------|----------|-----------|-------|
+| Faithfulness | ?/5 | ?/5 | +/- |
+| Answer Relevance | ?/5 | ?/5 | +/- |
+| Context Recall | ?/5 | ?/5 | +/- |
+| Completeness | ?/5 | ?/5 | +/- |
+
+> **TODO:** Điền bảng trên sau khi chạy `python eval.py` (Sprint 4)
+
+**Kết luận sơ bộ:**
+> Hybrid + Rerank dự kiến cải thiện Context Recall cho query dạng keyword (ERR-403, Level 3).
+> Xác nhận bằng số liệu eval.py.
+
+
