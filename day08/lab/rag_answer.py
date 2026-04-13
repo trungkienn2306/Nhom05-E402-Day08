@@ -496,7 +496,10 @@ if __name__ == "__main__":
         "SLA xử lý ticket P1 là bao lâu?",
         "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
         "Ai phải phê duyệt để cấp quyền Level 3?",
-        "ERR-403-AUTH là lỗi gì?",  # Query không có trong docs → kiểm tra abstain
+        "ERR-403-AUTH là lỗi gì?", 
+        "Chương trình AI thực chiến là gì?",
+        "Ở Vinuni học Master được hỗ trợ gì?",
+        "Hôm nay là thứ mấy?" # Query không có trong docs → kiểm tra abstain
     ]
 
     print("\n--- Sprint 2: Test Baseline (Dense) ---")
